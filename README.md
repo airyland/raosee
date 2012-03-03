@@ -14,5 +14,6 @@
 
 
 ##技术
++ php&codeigniter
 + html5&css3 base
 + push history and ajax
