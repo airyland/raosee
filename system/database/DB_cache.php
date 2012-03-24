@@ -2,11 +2,11 @@
 /**
  * CodeIgniter
  *
- * An open source application development framework for PHP 5.1.6 or newer
+ * An open source application development framework for PHP 4.3.2 or newer
  *
  * @package		CodeIgniter
  * @author		ExpressionEngine Dev Team
- * @copyright	Copyright (c) 2008 - 2011, EllisLab, Inc.
+ * @copyright	Copyright (c) 2008 - 2009, EllisLab, Inc.
  * @license		http://codeigniter.com/user_guide/license.html
  * @link		http://codeigniter.com
  * @since		Version 1.0
@@ -32,14 +32,14 @@ class CI_DB_Cache {
 	 *
 	 * Grabs the CI super object instance so we can access it.
 	 *
-	 */
-	function __construct(&$db)
+	 */	
+	function CI_DB_Cache(&$db)
 	{
 		// Assign the main CI object to $this->CI
 		// and load the file helper since we use it a lot
 		$this->CI =& get_instance();
 		$this->db =& $db;
-		$this->CI->load->helper('file');
+		//--change--
 	}
 
 	// --------------------------------------------------------------------
@@ -50,7 +50,7 @@ class CI_DB_Cache {
 	 * @access	public
 	 * @param	string	the path to the cache directory
 	 * @return	bool
-	 */
+	 */		
 	function check_path($path = '')
 	{
 		if ($path == '')
@@ -59,23 +59,17 @@ class CI_DB_Cache {
 			{
 				return $this->db->cache_off();
 			}
-
+		
 			$path = $this->db->cachedir;
 		}
-
+	
 		// Add a trailing slash to the path if needed
-		$path = preg_replace("/(.+?)\/*$/", "\\1/",  $path);
-
-		if ( ! is_dir($path) OR ! is_really_writable($path))
-		{
-			// If the path is wrong we'll turn off caching
-			return $this->db->cache_off();
-		}
-
+		//--change--
+		
 		$this->db->cachedir = $path;
 		return TRUE;
 	}
-
+	
 	// --------------------------------------------------------------------
 
 	/**
@@ -95,18 +89,34 @@ class CI_DB_Cache {
 		}
 
 		$segment_one = ($this->CI->uri->segment(1) == FALSE) ? 'default' : $this->CI->uri->segment(1);
-
+		
 		$segment_two = ($this->CI->uri->segment(2) == FALSE) ? 'index' : $this->CI->uri->segment(2);
-
-		$filepath = $this->db->cachedir.$segment_one.'+'.$segment_two.'/'.md5($sql);
-
-		if (FALSE === ($cachedata = read_file($filepath)))
-		{
-			return FALSE;
+	
+		$file_name = $segment_one.'-'.$segment_two.'-'.md5($sql);		
+		
+		if($this->db->cache_method == "storage" ){
+			$storage = new SaeStorage();
+		  $cachedata = $storage->read( $this->db->cachedir , $file_name  );
+			if( $storage->errno() != 0){
+		     return FALSE;
+		  }
+			return unserialize($cachedata);			
+		}else{
+			$mmc=memcache_init();
+			if($mmc){
+				 $cachedata = memcache_get( $mmc,$file_name) ;
+				 if(!$cachedata){
+				 	return unserialize($cachedata);		
+				 }else{
+				 	return false;
+				}
+				 
+			}else{
+			  return false;
+			} 			
+			
 		}
-
-		return unserialize($cachedata);
-	}
+	}	
 
 	// --------------------------------------------------------------------
 
@@ -116,6 +126,8 @@ class CI_DB_Cache {
 	 * @access	public
 	 * @return	bool
 	 */
+	 
+	 //--chang--
 	function write($sql, $object)
 	{
 		if ( ! $this->check_path())
@@ -124,29 +136,36 @@ class CI_DB_Cache {
 		}
 
 		$segment_one = ($this->CI->uri->segment(1) == FALSE) ? 'default' : $this->CI->uri->segment(1);
-
+		
 		$segment_two = ($this->CI->uri->segment(2) == FALSE) ? 'index' : $this->CI->uri->segment(2);
-
-		$dir_path = $this->db->cachedir.$segment_one.'+'.$segment_two.'/';
-
-		$filename = md5($sql);
-
-		if ( ! @is_dir($dir_path))
-		{
-			if ( ! @mkdir($dir_path, DIR_WRITE_MODE))
-			{
-				return FALSE;
-			}
-
-			@chmod($dir_path, DIR_WRITE_MODE);
+	
+		$file_name = $segment_one.'-'.$segment_two.'-'.md5($sql);
+		
+		if($this->db->cache_method == "storage" ){
+			$storage = new SaeStorage();
+		  $storage->write( $this->db->cachedir , $file_name , serialize($object) );
+		  if( $storage->errno() != 0){
+		     return FALSE;
+		  }		  
+		}else{
+			$mmc=memcache_init();
+			if($mmc){
+				 $catalog_data = memcache_get( $mmc,$this->db->cachedir);
+				 $catalog;
+				 if( $catalog_data == false ){
+				  	$catalog = array();
+				 }else{
+				   	$catalog = unserialize($catalog_data);
+				 } 
+				 if(  ! array_key_exists($file_name,$catalog) ){
+				 	    $catalog[$file_name] = "";
+				 	    memcache_set( $mmc,$this->db->cachedir,serialize($catalog) );
+				 }
+			 	 memcache_set( $mmc,$file_name,serialize($object) ) ;
+			}else{
+			  return false;
+			} 
 		}
-
-		if (write_file($dir_path.$filename, serialize($object)) === FALSE)
-		{
-			return FALSE;
-		}
-
-		@chmod($dir_path.$filename, FILE_WRITE_MODE);
 		return TRUE;
 	}
 
@@ -159,20 +178,41 @@ class CI_DB_Cache {
 	 * @return	bool
 	 */
 	function delete($segment_one = '', $segment_two = '')
-	{
+	{	
 		if ($segment_one == '')
 		{
 			$segment_one  = ($this->CI->uri->segment(1) == FALSE) ? 'default' : $this->CI->uri->segment(1);
 		}
-
+		
 		if ($segment_two == '')
 		{
 			$segment_two = ($this->CI->uri->segment(2) == FALSE) ? 'index' : $this->CI->uri->segment(2);
 		}
-
-		$dir_path = $this->db->cachedir.$segment_one.'+'.$segment_two.'/';
-
-		delete_files($dir_path, TRUE);
+		
+		$file_name = $segment_one.'-'.$segment_two.'-'.'*';
+	  if($this->db->cache_method == "storage" ){
+			$storage = new SaeStorage();
+			$file_list =  $storage->getList($this->db->cachedir,$file_name);
+			for($i=0; $i < count($file_list) ;$i++ ){
+	  		$storage->delete($this->db->cachedir,$file_list[$i]);
+			}
+		}else{
+			$mmc=memcache_init();
+			if($mmc){
+				 $catalog_data = memcache_get( $mmc,$this->db->cachedir);
+				 $catalog;
+				 if( $catalog_data == false ){
+            return false;
+				 }else{
+				   	$catalog = unserialize($catalog_data);
+				 } 
+				 if( array_key_exists($file_name,$catalog) ){
+				    unset( $catalog[$file_name] );
+				    memcache_set( $mmc,$this->db->cachedir,serialize($catalog) );
+				}
+				 memcache_delete( $mmc,$file_name );
+			}
+		}
 	}
 
 	// --------------------------------------------------------------------
@@ -185,7 +225,32 @@ class CI_DB_Cache {
 	 */
 	function delete_all()
 	{
-		delete_files($this->db->cachedir, TRUE);
+		if($this->db->cache_method == "storage" ){
+		  $storage = new SaeStorage();
+			$file_list =  $storage->getList($this->db->cachedir);
+			for($i=0; $i < count($file_list) ;$i++ ){
+	  		$storage->delete($this->db->cachedir,$file_list[$i]);
+			}			
+			if(count($file_list) == 100){
+		    delete_all();
+		  }
+		}else{
+			$mmc=memcache_init();
+			if($mmc){
+				 $catalog_data = memcache_get( $mmc,$this->db->cachedir);
+				 $catalog;
+				 if( $catalog_data == false ){
+            return false;
+				 }else{		 	
+				   	$catalog = unserialize($catalog_data); 	
+				 } 
+				 foreach ($catalog as $key=>$value){
+	          memcache_delete( $mmc,$key);
+				 }
+				 $catalog = array();
+				 memcache_set( $mmc,$this->db->cachedir,serialize($catalog) );
+			} 
+		}
 	}
 
 }
