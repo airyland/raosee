@@ -17,3 +17,12 @@
 + php&codeigniter
 + html5&css3 base
 + push history and ajax
+
+
+##资源网站
+wedding:http://bklynbrideonline.com
+
+http://www.lovelyish.hk/
+http://www.buzzfeed.com/
+http://www.datingish.hk/
+http://hkblog.xanga.com

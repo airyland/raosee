@@ -1,2 +1,5 @@
 nppBackup/*
 *.swp
+.svn
+.svn/
+
